@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 
 try:
     import wantgoo
@@ -23,21 +24,32 @@ class SimpleApp:
         self.label = tk.Label(self.root, text="即時股票資訊", font=("Arial", 20, "bold"))
         self.label.pack(pady=20)        
         
-        # 建立框架來包含 listbox 和 scrollbar
-        frame = tk.Frame(self.root)
-        frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        # 建立root_left_frame來包含左側的內容 
+        root_left_frame = tk.Frame(self.root)
+        root_left_frame.pack(side=tk.LEFT, pady=10, padx=10, fill=tk.BOTH, expand=True)
+
+        # 建立左側的標題
+        # left_title的文字靠左        
+        left_title = tk.Label(root_left_frame, text="請選擇股票(可多選)", font=("Arial"), anchor="w", justify="left")
+        left_title.pack(pady=(10,0), fill=tk.X,padx=10)
+
+        # 建立leftFrame來包含 listbox 和 scrollbar
+        left_frame = tk.Frame(root_left_frame)
+        left_frame.pack(pady=10, padx=10,fill=tk.BOTH, expand=True)
+
         
-        # 建立捲動列
-        self.scrollbar = tk.Scrollbar(frame)
+
+        # 增加left_frame內的內容
+        self.scrollbar = tk.Scrollbar(left_frame)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        #self.stock_listbox無法改變寬度,width=50沒有作用
-        
-        self.stock_listbox = tk.Listbox(frame,
+
+        self.stock_listbox = tk.Listbox(left_frame,
                                         selectmode=tk.MULTIPLE,
                                         yscrollcommand=self.scrollbar.set,
                                         width=15,
                                         height=20)
+        #抓取stock_listbox的選取事件
+        self.stock_listbox.bind('<<ListboxSelect>>', self.on_stock_select)
         
         # 手動插入股票資料
         for stock in self.stock_codes:
@@ -46,6 +58,54 @@ class SimpleApp:
         self.stock_listbox.pack(side=tk.LEFT)
         self.scrollbar.config(command=self.stock_listbox.yview)
 
+        
+        # cancel_button,改變寬度和高度
+        cancel_button = tk.Button(root_left_frame, text="取消", command=self.clear_selection)
+        cancel_button.pack(side=tk.BOTTOM, pady=(0,10), fill=tk.X, expand=True)
+
+        # 建立root_right_frame來包含選取股票的資訊
+        root_right_frame = tk.Frame(self.root)
+        root_right_frame.pack(side=tk.RIGHT, pady=10,padx=10,fill=tk.BOTH, expand=True)
+        # 在右側顯示選取的股票資訊
+        # 增加self.selected_button按鈕click功能
+        self.selected_button = tk.Button(
+            root_right_frame,
+            text="選取的股票數量是0筆",
+            font=("Arial", 12, "bold"))
+        self.selected_button.pack(pady=10, padx=10, fill=tk.X, expand=True)
+        self.selected_button.config(state=tk.DISABLED)
+        self.selected_button.bind("<Button-1>", self.start_crawling)
+
+    def on_stock_select(self, _=None):
+        """當股票被選取時，更新右側顯示的資訊"""
+        self.selected_stocks = [self.stock_listbox.get(i) for i in self.stock_listbox.curselection()]        
+        self.selected_button.config(text=f"選取的股票數量是:{len(self.selected_stocks)}筆")
+        if len(self.selected_stocks) == 0:
+            self.selected_button.config(state=tk.DISABLED)
+        else:
+            self.selected_button.config(state=tk.NORMAL)
+
+    def on_selected_button_click(self):
+                
+        """當股票被選取時，更新右側顯示的資訊"""
+        self.selected_stocks = [self.stock_listbox.get(i) for i in self.stock_listbox.curselection()]        
+        self.selected_button.config(text=f"選取的股票數量是:{len(self.selected_stocks)}筆")
+        if len(self.selected_stocks) == 0:
+            self.selected_button.config(state=tk.DISABLED)
+        else:
+            self.selected_button.config(state=tk.NORMAL)
+
+
+    def clear_selection(self):
+        """清除選取的股票資訊"""
+        self.stock_listbox.selection_clear(0, tk.END)
+        self.on_stock_select()  # 更新右側顯示的資訊
+
+    def start_crawling(self, event=None):
+        """開始爬蟲"""
+        # 在這裡可以加入爬蟲邏輯
+        # 例如: wantgoo.crawl_stocks(self.selected_stocks)
+        messagebox.showinfo("資訊", f"開始爬取以下股票: {', '.join(self.selected_stocks)}")
 
     
 
@@ -54,31 +114,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = SimpleApp(root)
     root.mainloop()
-
-    #非同步地從一組網址列表抓取股票資料，使用無頭的Chromium瀏覽器。
-
-    #此函式利用非同步網頁爬蟲，搭配自訂的瀏覽器與執行設定，
-    #擷取如日期時間、股票代碼、名稱、即時價格、漲跌、漲跌百分比、
-    #開盤價、最高價、成交量、最低價、前一日收盤價等資訊。
-    #資料擷取依據 schema 中定義的 CSS 選擇器。
-
-    #參數:
-        #urls (list[str]): 要抓取股票資料的網址列表。
-
-    #回傳:
-        #list[dict]: 每個網址對應一筆擷取到的股票資訊字典。
-
-    #備註:
-        #- 使用 SemaphoreDispatcher 控制並發數量與速率限制。
-        #- 爬蟲會等待圖片載入、掃描整頁並滾動延遲。
-        #- 擷取策略採用 JSON-CSS，依據 schema 設定。
-
-
-        #從 twstock 套件取得所有股票清單，並篩選出股票代碼以 '2' 開頭且長度為 4 的股票。
-
-    #回傳:
-        #list[dict]: 每筆資料包含以下欄位：
-            #- 'code': 股票代碼 (str)
-            #- 'name': 股票名稱 (str)
-            #- 'market': 市場類型 (str)
-            #- 'group': 產業類別 (str)
